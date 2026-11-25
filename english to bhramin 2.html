@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tamizhi (தமிழி / Tamil-Brahmi) Script Transliterator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Brahmi&family=Noto+Sans+Tamil&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: system-ui, "Noto Sans Tamil", sans-serif; max-width: 760px; margin: 30px auto; padding: 0 16px; color: #222; }
+    input { width: 100%; box-sizing: border-box; font-size: 1.3rem; padding: 12px; border: 2px solid #444; border-radius: 8px; }
+    .tamil-preview {
+      margin-top: 12px; padding: 10px 14px; background: #f4f1ea; border-left: 4px solid #8c6d46;
+      font-size: 1.2rem; color: #4a3f35; border-radius: 4px;
+    }
+    .stone-tablet {
+      margin-top: 16px; padding: 28px; background: #3b3734; color: #e6dfd5;
+      border-radius: 10px; font-size: 2.3rem; letter-spacing: 6px; line-height: 1.6;
+      text-shadow: 1px 1px 0px #1f1c1a, -1px -1px 0px #57524e;
+      font-family: "Noto Sans Brahmi", sans-serif;
+      word-wrap: break-word;
+    }
+    .hint { font-size: 0.9rem; color: #555; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h2>தமிழி (Tamil-Brahmi) Epigraphy Transliterator</h2>
+  <p>Type in <strong>Tamil</strong> or phonetic <strong>English (Tanglish)</strong> below:</p>
+  <input type="text" id="modernInput" value="thamizh" oninput="transliterateToBrahmi()" placeholder="e.g., தமிழ் or thamizh / vanakkam" />
+  <div class="hint">Tip: Use <code>zh</code> for ழ, <code>L</code> for ள, <code>N</code> for ண, <code>R</code> for ற, <code>th</code> for த, <code>ch/s</code> for ச.</div>
+
+  <div class="tamil-preview">
+    <strong>Modern Tamil:</strong> <span id="tamilOutput">தமிழ்</span>
+  </div>
+
+  <div class="stone-tablet" id="brahmiOutput">𑀢𑀫𑀺𑀵𑁆</div>
+
+  <script>
+    // 1. Phonetic English (Tanglish) -> Modern Tamil Engine
+    const VOWELS = {
+      "aa": ["அ", ""], // Fallback handled below
+      "ai": ["ஐ", "ை"], "au": ["ஔ", "ௌ"], "ou": ["ஔ", "ௌ"],
+      "aa": ["ஆ", "ா"], "A": ["ஆ", "ா"],
+      "ii": ["ஈ", "ீ"], "ee": ["ஈ", "ீ"], "I": ["ஈ", "ீ"],
+      "uu": ["ஊ", "ூ"], "oo": ["ஊ", "ூ"], "U": ["ஊ", "ூ"],
+      "ae": ["ஏ", "ே"], "ea": ["ஏ", "ே"], "E": ["ஏ", "ே"],
+      "oa": ["ஓ", "ோ"], "O": ["ஓ", "ோ"],
+      "a": ["அ", ""],
+      "i": ["இ", "ி"],
+      "u": ["உ", "ு"],
+      "e": ["எ", "ெ"],
+      "o": ["ஒ", "ொ"]
+    };
+
+    const CONSONANTS = {
+      "ng": "ங", "nj": "ஞ", "gn": "ஞ",
+      "th": "த", "dh": "த",
+      "ch": "ச", "sh": "ச",
+      "zh": "ழ",
+      "k": "க", "g": "க",
+      "s": "ச", "c": "ச",
+      "t": "ட", "d": "ட",
+      "N": "ண",
+      "n": "ந",
+      "p": "ப", "b": "ப",
+      "m": "ம",
+      "y": "ய",
+      "r": "ர",
+      "l": "ல",
+      "v": "வ", "w": "வ",
+      "L": "ள",
+      "R": "ற"
+    };
+
+    const VOWEL_KEYS = Object.keys(VOWELS).sort((a, b) => b.length - a.length);
+    const CONS_KEYS = Object.keys(CONSONANTS).sort((a, b) => b.length - a.length);
+
+    function englishToTamil(text) {
+      let result = "";
+      let i = 0;
+
+      while (i < text.length) {
+        // Check if current position starts with a consonant
+        let matchedCons = CONS_KEYS.find(k => text.startsWith(k, i));
+        if (!matchedCons) {
+          // Try lowercase match for multi-char digraphs like 'Th' or 'Zh'
+          const slice2 = text.slice(i, i + 2).toLowerCase();
+          if (CONSONANTS[slice2]) matchedCons = text.slice(i, i + 2);
+        }
+
+        if (matchedCons) {
+          let tamilCons = CONSONANTS[matchedCons] || CONSONANTS[matchedCons.toLowerCase()];
+          // Contextual 'n': word-end or before vowel mid-word often maps to ன (na)
+          if (matchedCons === "n" && i > 0 && /[a-zA-Z]/.test(text[i - 1])) {
+            const prevChar = text[i - 1].toLowerCase();
+            if (prevChar !== "n" && prevChar !== "t" && prevChar !== "d") {
+              tamilCons = "ன";
+            }
+          }
+          i += matchedCons.length;
+
+          // Check if a vowel immediately follows this consonant
+          let matchedVowel = VOWEL_KEYS.find(k => text.startsWith(k, i));
+          if (!matchedVowel) {
+            const v2 = text.slice(i, i + 2).toLowerCase();
+            const v1 = text[i] ? text[i].toLowerCase() : "";
+            if (VOWELS[v2]) matchedVowel = text.slice(i, i + 2);
+            else if (VOWELS[v1]) matchedVowel = text[i];
+          }
+
+          if (matchedVowel) {
+            const vowelSign = (VOWELS[matchedVowel] || VOWELS[matchedVowel.toLowerCase()])[1];
+            result += tamilCons + vowelSign;
+            i += matchedVowel.length;
+          } else {
+            // Pure consonant (Pulli / Virama)
+            result += tamilCons + "்";
+          }
+          continue;
+        }
+
+        // Check if current position starts with an independent vowel
+        let matchedVowel = VOWEL_KEYS.find(k => text.startsWith(k, i));
+        if (!matchedVowel) {
+          const v2 = text.slice(i, i + 2).toLowerCase();
+          const v1 = text[i] ? text[i].toLowerCase() : "";
+          if (VOWELS[v2]) matchedVowel = text.slice(i, i + 2);
+          else if (VOWELS[v1]) matchedVowel = text[i];
+        }
+
+        if (matchedVowel) {
+          const indepVowel = (VOWELS[matchedVowel] || VOWELS[matchedVowel.toLowerCase()])[0];
+          result += indepVowel;
+          i += matchedVowel.length;
+          continue;
+        }
+
+        // Pass through Tamil characters, spaces, numbers, and punctuation untouched
+        result += text[i];
+        i++;
+      }
+
+      return result;
+    }
+
+    // 2. Modern Tamil (U+0B80) -> Tamil-Brahmi / Tamizhi (U+11000)
+    const TAMIL_TO_BRAHMI = {
+      "அ": "𑀅", "ஆ": "𑀆", "இ": "𑀇", "ஈ": "𑀈", "உ": "𑀉", "ஊ": "𑀊",
+      "எ": "𑀏", "ஏ": "𑀏", "ஐ": "𑀐", "ஒ": "𑀑", "ஓ": "𑀑", "ஔ": "𑀒",
+      "க": "𑀓", "ங": "𑀗", "ச": "𑀘", "ஞ": "𑀜", "ட": "𑀝", "ண": "𑀡",
+      "த": "𑀢", "ந": "𑀦", "ப": "𑀧", "ம": "𑀫", "ய": "𑀬", "ர": "𑀭",
+      "ல": "𑀮", "வ": "𑀯", "ழ": "𑀵", "ள": "𑀴", "ற": "𑀶", "ன": "𑀷",
+      "ா": "𑀸", "ி": "𑀺", "ீ": "𑀻", "ு": "𑀼", "ூ": "𑀽",
+      "ெ": "𑁂", "ே": "𑁂", "ை": "𑁃", "ொ": "𑁄", "ோ": "𑁄", "ௌ": "𑁅", "்": "𑁆",
+      "ஃ": "𑀂", "ஜ": "𑀚", "ஷ": "𑀰", "ஸ": "𑀲", "ஹ": "𑀳",
+      "0": "𑁦", "1": "𑁧", "2": "𑁨", "3": "𑁩", "4": "𑁪",
+      "5": "𑁫", "6": "𑁬", "7": "𑁭", "8": "𑁮", "9": "𑁯"
+    };
+
+    function hasTamil(text) {
+      return /[\u0B80-\u0BFF]/.test(text);
+    }
+
+    function transliterateToBrahmi() {
+      const input = document.getElementById("modernInput").value;
+      const modernTamil = hasTamil(input) ? input : englishToTamil(input);
+
+      document.getElementById("tamilOutput").textContent = modernTamil;
+      const brahmi = Array.from(modernTamil)
+        .map(ch => TAMIL_TO_BRAHMI[ch] || ch)
+        .join("");
+      document.getElementById("brahmiOutput").textContent = brahmi;
+    }
+
+    transliterateToBrahmi();
+  </script>
+</body>
+</html>
